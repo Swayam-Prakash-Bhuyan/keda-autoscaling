@@ -4,7 +4,7 @@ name: dev-cluster
 
 nodes:
   - role: control-plane
-    image: kindest/node:v1.29.2
+    image: kindest/node:v1.32.0
     extraPortMappings:
       - containerPort: 80
         hostPort: 8080
@@ -14,7 +14,7 @@ nodes:
         protocol: TCP
 
   - role: worker
-    image: kindest/node:v1.29.2
+    image: kindest/node:v1.32.0
 
   - role: worker
-    image: kindest/node:v1.29.2
+    image: kindest/node:v1.32.0
