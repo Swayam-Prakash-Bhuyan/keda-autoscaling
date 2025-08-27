@@ -1,50 +1,20 @@
-# kind-cluster.yaml
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
-
-# You can name your cluster (optional)
-name: my-kind-cluster
+name: dev-cluster
 
 nodes:
-  # Control plane node
   - role: control-plane
-    kubeadmConfigPatches:
-      - |
-        kind: InitConfiguration
-        nodeRegistration:
-          kubeletExtraArgs:
-            node-labels: "ingress-ready=true"
-            authorization-mode: "AlwaysAllow"
+    image: kindest/node:v1.29.2
     extraPortMappings:
-      # Map localhost:80 and :443 to the control plane for ingress
       - containerPort: 80
-        hostPort: 80
+        hostPort: 8080
         protocol: TCP
-      - containerPort: 443dir
-        hostPort: 443
+      - containerPort: 443
+        hostPort: 8443
         protocol: TCP
-    # Optional: resource allocation (Docker container limits)
-    extraMounts: []
-    # You can also set CPU/memory limits for the node container:
-    # These don't affect Kubernetes scheduling, odirnly the Docker container limits.
-    # You may adjust these depending on your system capacity.
-    # format: "<number><unit>", unit = m (milli) or no unit = core/MB
-    # default unit for cpu is cores, for memory is bytes (so use M or G)
-    # Below sets ~2 vCPU and 4GiB RAM for this node container
-    # (requires kind >= v0.20.0 and container runtime that supports it)
-    # runtimeConfig:
-    #   cpu: "2"
-    #   memory: "4096M"
 
-  # Worker node 1
   - role: worker
-    # Optional resource limits
-    # runtimeConfig:
-    #   cpu: "2"
-    #   memory: "4096M"
+    image: kindest/node:v1.29.2
 
-  # Worker node 2
   - role: worker
-    # runtimeConfig:
-    #   cpu: "2"
-    #   memory: "4096M"
+    image: kindest/node:v1.29.2
