@@ -1,0 +1,282 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: robot-shop
+---
+# ========== web ==========
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: robot-shop
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: web } }
+  template:
+    metadata: { labels: { app: web } }
+    spec:
+      containers:
+      - name: web
+        image: robotshop/rs-web:latest
+        ports: [{ containerPort: 8080, name: http }]
+        env:
+        - { name: CATALOGUE_HOST, value: catalogue }
+        - { name: USER_HOST, value: user }
+        - { name: CART_HOST, value: cart }
+        - { name: SHIPPING_HOST, value: shipping }
+        - { name: PAYMENT_HOST, value: payment }
+        - { name: RATINGS_HOST, value: ratings }
+        - { name: ORDERS_HOST, value: orders }
+        resources:
+          requests: { cpu: "100m", memory: "128Mi" }
+          limits: { cpu: "500m", memory: "512Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: web, namespace: robot-shop }
+spec:
+  selector: { app: web }
+  ports:
+  - { name: http, port: 8080, targetPort: 8080 }
+---
+# ========== catalogue ==========
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalogue
+  namespace: robot-shop
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: catalogue } }
+  template:
+    metadata: { labels: { app: catalogue } }
+    spec:
+      containers:
+      - name: catalogue
+        image: robotshop/rs-catalogue:latest
+        ports: [{ containerPort: 8080, name: http }]
+        env:
+        - { name: MONGO, value: mongodb.ops.svc.cluster.local:27017 }
+        resources:
+          requests: { cpu: "100m", memory: "128Mi" }
+          limits: { cpu: "500m", memory: "512Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: catalogue, namespace: robot-shop }
+spec:
+  selector: { app: catalogue }
+  ports:
+  - { name: http, port: 8080, targetPort: 8080 }
+---
+# ========== cart ==========
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cart
+  namespace: robot-shop
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: cart } }
+  template:
+    metadata: { labels: { app: cart } }
+    spec:
+      containers:
+      - name: cart
+        image: robotshop/rs-cart:latest
+        ports: [{ containerPort: 8080, name: http }]
+        env:
+        - { name: REDIS_HOST, value: redis.ops.svc.cluster.local }
+        resources:
+          requests: { cpu: "100m", memory: "128Mi" }
+          limits: { cpu: "500m", memory: "512Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: cart, namespace: robot-shop }
+spec:
+  selector: { app: cart }
+  ports:
+  - { name: http, port: 8080, targetPort: 8080 }
+---
+# ========== orders ==========
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders
+  namespace: robot-shop
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: orders } }
+  template:
+    metadata: { labels: { app: orders } }
+    spec:
+      containers:
+      - name: orders
+        image: robotshop/rs-orders:latest
+        ports: [{ containerPort: 8080, name: http }]
+        env:
+        - { name: RABBITMQ_HOST, value: rabbitmq.ops.svc.cluster.local }
+        - { name: MYSQL_HOST, value: mysql.ops.svc.cluster.local }
+        resources:
+          requests: { cpu: "100m", memory: "128Mi" }
+          limits: { cpu: "500m", memory: "512Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: orders, namespace: robot-shop }
+spec:
+  selector: { app: orders }
+  ports:
+  - { name: http, port: 8080, targetPort: 8080 }
+---
+# ========== user ==========
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user
+  namespace: robot-shop
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: user } }
+  template:
+    metadata: { labels: { app: user } }
+    spec:
+      containers:
+      - name: user
+        image: robotshop/rs-user:latest
+        ports: [{ containerPort: 8080, name: http }]
+        env:
+        - { name: MONGO, value: mongodb.ops.svc.cluster.local:27017 }
+        resources:
+          requests: { cpu: "100m", memory: "128Mi" }
+          limits: { cpu: "500m", memory: "512Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: user, namespace: robot-shop }
+spec:
+  selector: { app: user }
+  ports:
+  - { name: http, port: 8080, targetPort: 8080 }
+---
+# ========== payment ==========
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment
+  namespace: robot-shop
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: payment } }
+  template:
+    metadata: { labels: { app: payment } }
+    spec:
+      containers:
+      - name: payment
+        image: robotshop/rs-payment:latest
+        ports: [{ containerPort: 8080, name: http }]
+        env:
+        - { name: KAFKA_HOST, value: redpanda.ops.svc.cluster.local:9092 }
+        resources:
+          requests: { cpu: "100m", memory: "128Mi" }
+          limits: { cpu: "500m", memory: "512Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: payment, namespace: robot-shop }
+spec:
+  selector: { app: payment }
+  ports:
+  - { name: http, port: 8080, targetPort: 8080 }
+---
+# ========== shipping ==========
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shipping
+  namespace: robot-shop
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: shipping } }
+  template:
+    metadata: { labels: { app: shipping } }
+    spec:
+      containers:
+      - name: shipping
+        image: robotshop/rs-shipping:latest
+        ports: [{ containerPort: 8080, name: http }]
+        env:
+        - { name: REDIS_HOST, value: redis.ops.svc.cluster.local }
+        resources:
+          requests: { cpu: "100m", memory: "128Mi" }
+          limits: { cpu: "500m", memory: "512Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: shipping, namespace: robot-shop }
+spec:
+  selector: { app: shipping }
+  ports:
+  - { name: http, port: 8080, targetPort: 8080 }
+---
+# ========== ratings ==========
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ratings
+  namespace: robot-shop
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: ratings } }
+  template:
+    metadata: { labels: { app: ratings } }
+    spec:
+      containers:
+      - name: ratings
+        image: robotshop/rs-ratings:latest
+        ports: [{ containerPort: 8080, name: http }]
+        env:
+        - { name: MYSQL_HOST, value: mysql.ops.svc.cluster.local }
+        resources:
+          requests: { cpu: "100m", memory: "128Mi" }
+          limits: { cpu: "500m", memory: "512Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: ratings, namespace: robot-shop }
+spec:
+  selector: { app: ratings }
+  ports:
+  - { name: http, port: 8080, targetPort: 8080 }
+---
+# ========== recommendation ==========
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recommendation
+  namespace: robot-shop
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: recommendation } }
+  template:
+    metadata: { labels: { app: recommendation } }
+    spec:
+      containers:
+      - name: recommendation
+        image: robotshop/rs-recommendation:latest
+        ports: [{ containerPort: 8080, name: http }]
+        env:
+        - { name: NATS_HOST, value: nats.ops.svc.cluster.local }
+        resources:
+          requests: { cpu: "100m", memory: "128Mi" }
+          limits: { cpu: "500m", memory: "512Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: recommendation, namespace: robot-shop }
+spec:
+  selector: { app: recommendation }
+  ports:
+  - { name: http, port: 8080, targetPort: 8080 }
+

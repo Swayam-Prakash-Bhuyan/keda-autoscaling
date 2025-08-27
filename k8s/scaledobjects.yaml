@@ -1,0 +1,414 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keda-rabbitmq-secret
+  namespace: robot-shop
+stringData:
+  host: amqp://guest:guest@rabbitmq.ops.svc.cluster.local:5672
+  username: guest
+  password: guest
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: rabbitmq-ta
+  namespace: robot-shop
+spec:
+  secretTargetRef:
+  - parameter: host
+    name: keda-rabbitmq-secret
+    key: host
+  - parameter: username
+    name: keda-rabbitmq-secret
+    key: username
+  - parameter: password
+    name: keda-rabbitmq-secret
+    key: password
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keda-redis-secret
+  namespace: robot-shop
+stringData:
+  address: redis.ops.svc.cluster.local:6379
+  password: ""
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: redis-ta
+  namespace: robot-shop
+spec:
+  secretTargetRef:
+  - parameter: address
+    name: keda-redis-secret
+    key: address
+  - parameter: password
+    name: keda-redis-secret
+    key: password
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keda-mongo-secret
+  namespace: robot-shop
+stringData:
+  connectionString: mongodb://admin:password@mongodb.ops.svc.cluster.local:27017
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: mongo-ta
+  namespace: robot-shop
+spec:
+  secretTargetRef:
+  - parameter: connectionString
+    name: keda-mongo-secret
+    key: connectionString
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keda-mysql-secret
+  namespace: robot-shop
+stringData:
+  connectionString: user:password@tcp(mysql.ops.svc.cluster.local:3306)/robotshop
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: mysql-ta
+  namespace: robot-shop
+spec:
+  secretTargetRef:
+  - parameter: connectionString
+    name: keda-mysql-secret
+    key: connectionString
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keda-kafka-secret
+  namespace: robot-shop
+stringData:
+  bootstrapServers: redpanda.ops.svc.cluster.local:9092
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: kafka-ta
+  namespace: robot-shop
+spec:
+  secretTargetRef:
+  - parameter: bootstrapServers
+    name: keda-kafka-secret
+    key: bootstrapServers
+---
+# Prometheus address secret (optional placeholder)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keda-prometheus-secret
+  namespace: robot-shop
+stringData:
+  serverAddress: http://prometheus-operated.monitoring.svc:9090
+
+---
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: web-scaler
+  namespace: robot-shop
+spec:
+  scaleTargetRef:
+    name: web
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  pollingInterval: 15
+  cooldownPeriod: 60
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-operated.monitoring.svc:9090
+      metricName: web_qps
+      query: sum(rate(http_requests_total{job="web",namespace="robot-shop"}[2m]))
+      threshold: "100"
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-operated.monitoring.svc:9090
+      metricName: web_p95
+      query: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="web",namespace="robot-shop"}[5m])) by (le))
+      threshold: "0.5"
+  - type: cron
+    metadata:
+      # Example test cron: scale to 6 every minute for quick validation. Change to desired schedule for production.
+      start: "*/1 * * * *"
+      end: "*/1 * * * *"
+      timezone: "Asia/Kolkata"
+      desiredReplicas: "6"
+
+---
+# ----- CART: cpu + memory + websocket connections (prometheus) -----
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: cart-scaler
+  namespace: robot-shop
+spec:
+  scaleTargetRef:
+    name: cart
+  minReplicaCount: 1
+  maxReplicaCount: 8
+  pollingInterval: 15
+  triggers:
+  - type: cpu
+    metadata:
+      type: Utilization
+      value: "60"
+  - type: memory
+    metadata:
+      type: Utilization
+      value: "70"
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-operated.monitoring.svc:9090
+      metricName: active_ws_connections
+      query: sum(active_ws_connections{namespace="robot-shop",job="cart"})
+      threshold: "200"
+
+---
+# ----- ORDERS: rabbitmq queue length + business KPI orders_per_minute -----
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: orders-scaler
+  namespace: robot-shop
+spec:
+  scaleTargetRef:
+    name: orders
+  minReplicaCount: 1
+  maxReplicaCount: 12
+  pollingInterval: 15
+  triggers:
+  - type: rabbitmq
+    metadata:
+      queueName: orders_queue
+      queueLength: "10"
+    authenticationRef:
+      name: rabbitmq-ta
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-operated.monitoring.svc:9090
+      metricName: orders_per_minute
+      query: sum(rate(order_success_total{namespace="robot-shop"}[1m])) * 60
+      threshold: "200"
+
+---
+# ----- PAYMENT: kafka consumer lag + payment error rate (prometheus) -----
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: payment-scaler
+  namespace: robot-shop
+spec:
+  scaleTargetRef:
+    name: payment
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  pollingInterval: 20
+  triggers:
+  - type: kafka
+    metadata:
+      bootstrapServers: redpanda.ops.svc.cluster.local:9092
+      topic: payments
+      consumerGroup: payment-consumer-group
+      lagThreshold: "5"
+    authenticationRef:
+      name: kafka-ta
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-operated.monitoring.svc:9090
+      metricName: payment_error_rate
+      query: (sum(rate(payment_errors_total{namespace="robot-shop"}[1m])) / sum(rate(payment_requests_total{namespace="robot-shop"}[1m]))) * 100
+      threshold: "5"
+
+---
+# ----- SHIPPING: redis-streams pending entries + shipping latency (prometheus) -----
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: shipping-scaler
+  namespace: robot-shop
+spec:
+  scaleTargetRef:
+    name: shipping
+  minReplicaCount: 1
+  maxReplicaCount: 8
+  pollingInterval: 15
+  triggers:
+  - type: redis-streams
+    metadata:
+      address: redis.ops.svc.cluster.local:6379
+      stream: shipping_stream
+      consumerGroup: shipping-group
+      pendingEntriesCount: "10"
+    authenticationRef:
+      name: redis-ta
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-operated.monitoring.svc:9090
+      metricName: shipping_p95
+      query: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="shipping",namespace="robot-shop"}[5m])) by (le))
+      threshold: "0.5"
+
+---
+# ----- USER: mongodb query count -----
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: user-scaler
+  namespace: robot-shop
+spec:
+  scaleTargetRef:
+    name: user
+  minReplicaCount: 1
+  maxReplicaCount: 6
+  pollingInterval: 20
+  triggers:
+  - type: mongodb
+    metadata:
+      dbName: user_db
+      collection: users
+      query: '{"status":"active"}'
+      queryValue: "5"
+    authenticationRef:
+      name: mongo-ta
+
+---
+# ----- CATALOGUE: mysql pending rows (table) + catalogue cpu -----
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: catalogue-scaler
+  namespace: robot-shop
+spec:
+  scaleTargetRef:
+    name: catalogue
+  minReplicaCount: 1
+  maxReplicaCount: 6
+  pollingInterval: 20
+  triggers:
+  - type: mysql
+    metadata:
+      connectionString: "user:password@tcp(mysql.ops.svc.cluster.local:3306)/robotshop"
+      query: "SELECT COUNT(*) FROM catalogue WHERE status='pending';"
+      threshold: "10"
+    authenticationRef:
+      name: mysql-ta
+  - type: cpu
+    metadata:
+      type: Utilization
+      value: "60"
+
+---
+# ----- RATINGS: prometheus error rate -----
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ratings-scaler
+  namespace: robot-shop
+spec:
+  scaleTargetRef:
+    name: ratings
+  minReplicaCount: 1
+  maxReplicaCount: 5
+  pollingInterval: 30
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-operated.monitoring.svc:9090
+      query: sum(rate(http_requests_total{job="ratings",status=~"5..",namespace="robot-shop"}[2m]))
+      metricName: ratings_error_rate
+      threshold: "5"
+
+---
+# ----- RECOMMENDATION: GPU job queue (prometheus) + NATS backlog (if used) -----
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: recommendation-scaler
+  namespace: robot-shop
+spec:
+  scaleTargetRef:
+    name: recommendation
+  minReplicaCount: 0
+  maxReplicaCount: 8
+  pollingInterval: 15
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-operated.monitoring.svc:9090
+      metricName: gpu_jobs_pending
+      query: sum(gpu_jobs_pending{namespace="robot-shop"})
+      threshold: "5"
+  - type: stan
+    metadata:
+      natsServerMonitoringEndpoint: "http://nats.ops.svc.cluster.local:8222"
+      subject: "recommendation-jobs"
+      queueGroup: "recommendation"
+      lagThreshold: "20"
+
+---
+# ----- DISPATCH / NOTIFICATIONS: NATS (stan) backlog -----
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: dispatch-scaler
+  namespace: robot-shop
+spec:
+  scaleTargetRef:
+    name: dispatch
+  minReplicaCount: 0
+  maxReplicaCount: 6
+  pollingInterval: 20
+  triggers:
+  - type: stan
+    metadata:
+      natsServerMonitoringEndpoint: "http://nats.ops.svc.cluster.local:8222"
+      subject: "email-events"
+      queueGroup: "notifications"
+      lagThreshold: "50"
+
+---
+# ----- LOAD / LOGPROCESSOR: log ingestion rate (prometheus) -----
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: load-log-scaler
+  namespace: robot-shop
+spec:
+  scaleTargetRef:
+    name: load
+  minReplicaCount: 0
+  maxReplicaCount: 6
+  pollingInterval: 15
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-operated.monitoring.svc:9090
+      metricName: log_events_rate
+      query: sum(rate(log_events_total{namespace="robot-shop"}[1m]))
+      threshold: "200"
+
+---
+# ----- GENERIC: fallback HPA via KEDA - example for any service needing cpu mem -----
+# (not tied to a specific service; add more ScaledObjects as you need)
+# Example shown for 'web' already; avoid multiple ScaledObjects for the same workload.
+
+# ========================================================
+# End of scaledobjects.yaml
+# ========================================================
+
