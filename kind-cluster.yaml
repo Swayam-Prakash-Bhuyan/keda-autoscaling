@@ -20,13 +20,13 @@ nodes:
       - containerPort: 80
         hostPort: 80
         protocol: TCP
-      - containerPort: 443
+      - containerPort: 443dir
         hostPort: 443
         protocol: TCP
     # Optional: resource allocation (Docker container limits)
     extraMounts: []
     # You can also set CPU/memory limits for the node container:
-    # These don't affect Kubernetes scheduling, only the Docker container limits.
+    # These don't affect Kubernetes scheduling, odirnly the Docker container limits.
     # You may adjust these depending on your system capacity.
     # format: "<number><unit>", unit = m (milli) or no unit = core/MB
     # default unit for cpu is cores, for memory is bytes (so use M or G)
