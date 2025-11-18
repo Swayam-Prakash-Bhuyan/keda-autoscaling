@@ -126,21 +126,22 @@ EOF
 This is the **correct** new CRD spec (NO deprecated fields).
 
 ```bash
-cat <<EOF | kubectl apply -f -
+cat <<'EOF' | kubectl apply -f -
 apiVersion: http.keda.sh/v1alpha1
 kind: HTTPScaledObject
 metadata:
   name: nginx-app-http
+  namespace: default
 spec:
   hosts:
-    - myhost.com
-
-  targetPendingRequests: 100
-
+  - myhost.com
   scaleTargetRef:
     name: nginx-app
-    kind: Deployment
-    apiVersion: apps/v1
+    service: nginx-app
+    port: 80
+  replicas:
+    min: 0
+    max: 10
 EOF
 ```
 
@@ -162,7 +163,8 @@ kubectl get svc nginx-app
 Send load (example):
 
 ```bash
-for i in {1..2000}; do curl -s http://NODE-IP:31001 >/dev/null & done
+kubectl port-forward svc/keda-add-ons-http-interceptor-proxy -n keda 32500:8080
+for i in {1..2000}; do curl localhost:32500 -H 'Host: myhost.com' >/dev/null & done
 ```
 
 Check replica count:
