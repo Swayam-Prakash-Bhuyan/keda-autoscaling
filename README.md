@@ -1,15 +1,3 @@
-Perfect — here is a **complete, clean, from-scratch KEDA + HTTP Add-on setup**, using **`cat <<EOF | kubectl apply -f -`** for every resource exactly as you requested.
-
-This will deploy:
-
-✅ KEDA
-✅ KEDA HTTP Add-on
-✅ NGINX Deployment
-✅ NodePort Service
-✅ Cron-based ScaledObject
-✅ HTTPScaledObject (latest CRD spec)
-
-All **corrected**, **working**, and **from scratch**.
 
 ---
 
@@ -164,7 +152,11 @@ Send load (example):
 
 ```bash
 kubectl port-forward svc/keda-add-ons-http-interceptor-proxy -n keda 32500:8080
-for i in {1..2000}; do curl localhost:32500 -H 'Host: myhost.com' >/dev/null & done
+
+for i in {1..2000}; do
+  curl -s -o /dev/null -H "Host: myhost.com" http://localhost:32500 &
+done
+wait
 ```
 
 Check replica count:
@@ -175,12 +167,4 @@ kubectl get deploy nginx-app -w
 
 ---
 
-# 🎉 All Done — Working End-to-End
 
-If you want, I can also give you:
-
-✅ A load generator script
-✅ A cleanup script
-✅ A GitHub-style folder structure
-✅ Diagrams (Mermaid / Excalidraw)
-➡ Just say: **“Give me advanced setup one by one”**
